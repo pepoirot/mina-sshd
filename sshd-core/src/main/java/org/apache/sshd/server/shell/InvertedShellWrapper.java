@@ -21,7 +21,10 @@ package org.apache.sshd.server.shell;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
+import org.apache.mina.util.NamePreservingRunnable;
 import org.apache.sshd.server.Command;
 import org.apache.sshd.server.Environment;
 import org.apache.sshd.server.ExitCallback;
@@ -38,6 +41,7 @@ import org.apache.sshd.server.ExitCallback;
 public class InvertedShellWrapper implements Command {
 
     private final InvertedShell shell;
+    private final Executor executor;
     private InputStream in;
     private OutputStream out;
     private OutputStream err;
@@ -45,10 +49,14 @@ public class InvertedShellWrapper implements Command {
     private InputStream shellOut;
     private InputStream shellErr;
     private ExitCallback callback;
-    private Thread thread;
 
     public InvertedShellWrapper(InvertedShell shell) {
+        this(shell, Executors.newSingleThreadExecutor());
+    }
+
+    public InvertedShellWrapper(InvertedShell shell, Executor executor) {
         this.shell = shell;
+        this.executor = executor;
     }
 
     public void setInputStream(InputStream in) {
@@ -73,13 +81,11 @@ public class InvertedShellWrapper implements Command {
         shellIn = shell.getInputStream();
         shellOut = shell.getOutputStream();
         shellErr = shell.getErrorStream();
-        thread = new Thread("inverted-shell-pump") {
-            @Override
+        executor.execute(new NamePreservingRunnable(new Runnable() {
             public void run() {
                 pumpStreams();
             }
-        };
-        thread.start();
+        }, "inverted-shell-pump"));
     }
 
     public void destroy() {
